@@ -190,3 +190,38 @@ func TestFindTemplateFiles(t *testing.T) {
 
 	assert.Equal(t, expected, got)
 }
+
+func TestProcessTemplates_GeneratesImportTF(t *testing.T) {
+	tests := map[string]struct {
+		targetScript string
+	}{
+		"import.sh": {
+			targetScript: "./testdata/res/import.sh",
+		},
+		"appsec-import.sh": {
+			targetScript: "./testdata/res/appsec-import.sh",
+		},
+	}
+
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			templateFS := os.DirFS("./testdata")
+			processor := FSTemplateProcessor{
+				TemplatesFS: templateFS,
+				TemplateTargets: map[string]string{
+					"import_script.tmpl": test.targetScript,
+				},
+			}
+
+			err := processor.ProcessTemplates(TestData{})
+			require.NoError(t, err)
+
+			importTFPath := "./testdata/res/import.tf"
+			content, err := os.ReadFile(importTFPath)
+			require.NoError(t, err)
+			assert.Contains(t, string(content), "# Auto-generated inline imports")
+			assert.Contains(t, string(content), "to = akamai_edge_hostname.example")
+			assert.Contains(t, string(content), `id = "ehn_123,ctr_1-ABC,grp_1"`)
+		})
+	}
+}

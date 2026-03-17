@@ -92,7 +92,9 @@ To set up and use multiple clients, clients that use an account switch key, or c
     ./akamai-terraform --edgerc "~/.edgerc" --section "default" --accountkey "A-CCT1234:A-CCT5432" export-property --version 3 "my-property"
     ```
 
-2. When the export is complete, run the import script to add your assets to your state.
+2. When the export is complete, use the generated import artifacts to add your assets to your state.
+
+  The export creates an import shell script (for example, `import.sh` or `appsec-import.sh`) and an `import.tf` file with Terraform import blocks generated from that script.
 
 > **Note:** Exported variable configuration files are entity-specific. When exporting multiple assets, merge the variable file content, removing any duplicates.
 
