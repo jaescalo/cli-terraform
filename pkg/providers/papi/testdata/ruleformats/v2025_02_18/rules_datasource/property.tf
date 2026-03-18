@@ -28,7 +28,7 @@ resource "akamai_property" "test-edgesuite-net" {
 #  contact                        = []
 #  version                        = var.activate_latest_on_staging ? akamai_property.test-edgesuite-net.latest_version : akamai_property.test-edgesuite-net.staging_version
 #  network                        = "STAGING"
-#  auto_acknowledge_rule_warnings = false
+#  auto_acknowledge_rule_warnings = true
 #}
 
 # NOTE: Be careful when removing this resource as you can disable traffic
@@ -37,5 +37,5 @@ resource "akamai_property" "test-edgesuite-net" {
 #  contact                        = []
 #  version                        = var.activate_latest_on_production ? akamai_property.test-edgesuite-net.latest_version : akamai_property.test-edgesuite-net.production_version
 #  network                        = "PRODUCTION"
-#  auto_acknowledge_rule_warnings = false
+#  auto_acknowledge_rule_warnings = true
 #}

@@ -1,0 +1,23 @@
+{{- /*gotype: github.com/akamai/cli-terraform/v2/pkg/providers/papi.TFData*/ -}}
+variable "rule_variables" {
+  type = map(object({
+    name        = string
+    description = string
+    value       = string
+    hidden      = bool
+    sensitive   = bool
+  }))
+}
+
+{{- range .RuleOriginHostnameVars}}
+variable "{{.VariableName}}" {
+  type = string
+}
+
+{{- end}}
+{{- range .RuleCPCodeVars}}
+variable "{{.VariableName}}" {
+  type = number
+}
+
+{{- end}}

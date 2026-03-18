@@ -134,7 +134,7 @@ resource "akamai_property_activation" "{{.Property.PropertyResourceName}}-stagin
 {{- if .Property.StagingInfo.ActivationNote}}
   note                           = {{template "Text" .Property.StagingInfo.ActivationNote}}
 {{- end}}
-  auto_acknowledge_rule_warnings = false
+  auto_acknowledge_rule_warnings = true
 }
 {{ else}}
 #resource "akamai_property_activation" "{{.Property.PropertyResourceName}}-staging" {
@@ -145,7 +145,7 @@ resource "akamai_property_activation" "{{.Property.PropertyResourceName}}-stagin
 {{- if .Property.StagingInfo.ActivationNote}}
 #  note                           = {{template "Text" .Property.StagingInfo.ActivationNote}}
 {{- end}}
-#  auto_acknowledge_rule_warnings = false
+#  auto_acknowledge_rule_warnings = true
 #}
 {{ end}}
 # NOTE: Be careful when removing this resource as you can disable traffic
@@ -158,7 +158,7 @@ resource "akamai_property_activation" "{{.Property.PropertyResourceName}}-produc
 {{- if .Property.ProductionInfo.ActivationNote}}
   note                           = {{template "Text" .Property.ProductionInfo.ActivationNote}}
 {{- end}}
-  auto_acknowledge_rule_warnings = false
+  auto_acknowledge_rule_warnings = true
 }
 {{ else}}
 #resource "akamai_property_activation" "{{.Property.PropertyResourceName}}-production" {
@@ -169,7 +169,7 @@ resource "akamai_property_activation" "{{.Property.PropertyResourceName}}-produc
 {{- if .Property.ProductionInfo.ActivationNote}}
 #  note                           = {{template "Text" .Property.ProductionInfo.ActivationNote}}
 {{- end}}
-#  auto_acknowledge_rule_warnings = false
+#  auto_acknowledge_rule_warnings = true
 #}
 {{ end}}
 {{- if and (.Property.HostnameBucket) (.Property.HostnameBucket.HasStagingActivation)}}

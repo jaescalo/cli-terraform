@@ -3,3 +3,5 @@ test/
 akamai-terraform
 .idea
 /pkg/providers/**/testdata/res/**/*
+.DS_Store
+example*

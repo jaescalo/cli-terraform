@@ -1,0 +1,113 @@
+{{- /*gotype: github.com/akamai/cli-terraform/v2/pkg/providers/papi.TFData*/ -}}
+terraform {
+  required_providers {
+    akamai = {
+      source  = "akamai/akamai"
+      version = ">= 10.0.0"
+    }
+  }
+  required_version = ">= 1.0"
+}
+
+{{- if .UseSplitDepth}}
+module "rules" {
+  source = "./rules"
+
+  {{- if .UseEnvironmentScaffold}}
+  rule_variables       = var.rule_variables
+  {{- range .RuleOriginHostnameVars}}
+  {{.VariableName}} = var.{{.VariableName}}
+  {{- end}}
+  {{- range .RuleCPCodeVars}}
+  {{.VariableName}} = var.{{.VariableName}}
+  {{- end}}
+  {{- end}}
+}
+{{- end}}
+
+resource "akamai_edge_hostname" "edge_hostnames" {
+  for_each = var.edge_hostnames
+
+  contract_id   = var.contract_id
+  group_id      = var.group_id
+  ip_behavior   = each.value.ip_behavior
+  edge_hostname = each.value.edge_hostname
+  certificate   = try(each.value.certificate, null)
+  ttl           = try(each.value.ttl, null)
+}
+
+resource "akamai_property" "{{.Property.PropertyResourceName}}" {
+  name       = var.property_config.name
+  contract_id = var.contract_id
+  group_id    = var.group_id
+  product_id  = var.property_config.product_id
+
+  dynamic "hostnames" {
+    for_each = var.property_hostnames
+    content {
+      cname_from             = hostnames.value.cname_from
+      cname_to               = hostnames.value.cname_to
+      cert_provisioning_type = hostnames.value.cert_provisioning_type
+
+      dynamic "ccm_certificates" {
+        for_each = hostnames.value.ccm_certificates == null ? [] : [hostnames.value.ccm_certificates]
+        content {
+          rsa_cert_id   = try(ccm_certificates.value.rsa_cert_id, null)
+          ecdsa_cert_id = try(ccm_certificates.value.ecdsa_cert_id, null)
+        }
+      }
+
+      dynamic "mtls" {
+        for_each = hostnames.value.mtls == null ? [] : [hostnames.value.mtls]
+        content {
+          ca_set_id          = mtls.value.ca_set_id
+          check_client_ocsp  = mtls.value.check_client_ocsp
+          send_ca_set_client = mtls.value.send_ca_set_client
+        }
+      }
+
+      dynamic "tls_configuration" {
+        for_each = hostnames.value.tls_configuration == null ? [] : [hostnames.value.tls_configuration]
+        content {
+          cipher_profile              = tls_configuration.value.cipher_profile
+          disallowed_tls_versions     = try(tls_configuration.value.disallowed_tls_versions, null)
+          fips_mode                   = tls_configuration.value.fips_mode
+          staple_server_ocsp_response = tls_configuration.value.staple_server_ocsp_response
+        }
+      }
+    }
+  }
+{{- if .UseSplitDepth}}
+  rule_format   = module.rules.rule_format
+  rules         = module.rules.rules
+{{- else if .RulesAsHCL}}
+  rule_format = data.akamai_property_rules_builder.{{(index .Rules 0).TerraformName}}.rule_format
+  rules       = data.akamai_property_rules_builder.{{(index .Rules 0).TerraformName}}.json
+{{- else}}
+  rule_format = "{{.Property.RuleFormat}}"
+  rules       = data.akamai_property_rules_template.rules.json
+{{- end}}
+  version_notes = var.version_notes
+}
+
+{{- if .Property.StagingInfo.HasActivation}}
+resource "akamai_property_activation" "{{.Property.PropertyResourceName}}-staging" {
+  property_id                    = akamai_property.{{.Property.PropertyResourceName}}.id
+  contact                        = var.activation_config.staging.contacts
+  version                        = var.activate_latest_on_staging ? akamai_property.{{.Property.PropertyResourceName}}.latest_version : akamai_property.{{.Property.PropertyResourceName}}.staging_version
+  network                        = "STAGING"
+  note                           = var.activation_config.staging.note
+  auto_acknowledge_rule_warnings = true
+}
+{{- end}}
+
+{{- if .Property.ProductionInfo.HasActivation}}
+resource "akamai_property_activation" "{{.Property.PropertyResourceName}}-production" {
+  property_id                    = akamai_property.{{.Property.PropertyResourceName}}.id
+  contact                        = var.activation_config.production.contacts
+  version                        = var.activate_latest_on_production ? akamai_property.{{.Property.PropertyResourceName}}.latest_version : akamai_property.{{.Property.PropertyResourceName}}.production_version
+  network                        = "PRODUCTION"
+  note                           = var.activation_config.production.note
+  auto_acknowledge_rule_warnings = true
+}
+{{- end}}

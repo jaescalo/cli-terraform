@@ -366,7 +366,7 @@ func CommandLocator() []*cli.Command {
 			Description: "Generates Terraform configuration for Property resources.",
 			Usage:       "export-property",
 			ArgsUsage:   "<property name>",
-			Action:      validatedAction(papi.CmdCreateProperty, requireValidWorkpath, requireNArguments(1), validateSplitDepth, validateRuleFormat(true)),
+			Action:      validatedAction(papi.CmdCreateProperty, requireValidWorkpath, requireNArguments(1), validateSplitDepth, validateEnvironmentLayout, validateRuleFormat(true)),
 			Flags: []cli.Flag{
 				&cli.BoolFlag{
 					Name:  "akamai-property-bootstrap",
@@ -379,6 +379,10 @@ func CommandLocator() []*cli.Command {
 				&cli.IntFlag{
 					Name:  "split-depth",
 					Usage: "Exports the rules into a dedicated module. Each rule will be placed in a separate file up to a specified nesting level.",
+				},
+				&cli.BoolFlag{
+					Name:  "environment-layout",
+					Usage: "Creates a multi-environment scaffold (root module call, modules/property, and environments/dev|prod tfvars). Requires --rules-as-hcl and --split-depth.",
 				},
 				&cli.StringFlag{
 					Name:        "tfworkpath",

@@ -73,6 +73,19 @@ func validateSplitDepth(ctx *cli.Context) error {
 	return nil
 }
 
+func validateEnvironmentLayout(ctx *cli.Context) error {
+	if !ctx.IsSet("environment-layout") || !ctx.Bool("environment-layout") {
+		return nil
+	}
+	if !ctx.IsSet("rules-as-hcl") || !ctx.Bool("rules-as-hcl") {
+		return cli.Exit(color.RedString(`"environment-layout" option must be used along with "rules-as-hcl"`), 1)
+	}
+	if !ctx.IsSet("split-depth") {
+		return cli.Exit(color.RedString(`"environment-layout" option must be used along with "split-depth"`), 1)
+	}
+	return nil
+}
+
 func validateSubCommands(ctx *cli.Context) error {
 	if ctx.NArg() == 0 {
 		return showHelpCommandWithErr(ctx, fmt.Sprintf("One of the subcommands is required : %s", getSubcommandsNames(ctx)))

@@ -68,7 +68,7 @@ resource "akamai_property_include_activation" "{{$include.IncludeName}}_staging"
   group_id = akamai_property_include.{{$include.IncludeName}}.group_id
   include_id = akamai_property_include.{{$include.IncludeName}}.id
   network = "STAGING"
-  auto_acknowledge_rule_warnings = false
+  auto_acknowledge_rule_warnings = true
   version = var.activate_latest_on_staging ? akamai_property_include.{{$include.IncludeName}}.latest_version : akamai_property_include.{{$include.IncludeName}}.staging_version
 {{- if $include.StagingInfo.ActivationNote}}
   note = {{template "Text" $include.StagingInfo.ActivationNote}}
@@ -82,7 +82,7 @@ resource "akamai_property_include_activation" "{{$include.IncludeName}}_staging"
 #  group_id = akamai_property_include.{{$include.IncludeName}}.group_id
 #  include_id = akamai_property_include.{{$include.IncludeName}}.id
 #  network = "STAGING"
-#  auto_acknowledge_rule_warnings = false
+#  auto_acknowledge_rule_warnings = true
 #  version = var.activate_latest_on_staging ? akamai_property_include.{{$include.IncludeName}}.latest_version : akamai_property_include.{{$include.IncludeName}}.staging_version
 {{- if $include.StagingInfo.ActivationNote}}
 #  note = {{template "Text" $include.StagingInfo.ActivationNote}}
@@ -97,7 +97,7 @@ resource "akamai_property_include_activation" "{{$include.IncludeName}}_producti
   group_id = akamai_property_include.{{$include.IncludeName}}.group_id
   include_id = akamai_property_include.{{$include.IncludeName}}.id
   network = "PRODUCTION"
-  auto_acknowledge_rule_warnings = false
+  auto_acknowledge_rule_warnings = true
   version = var.activate_latest_on_production ? akamai_property_include.{{$include.IncludeName}}.latest_version : akamai_property_include.{{$include.IncludeName}}.production_version
 {{- if $include.ProductionInfo.ActivationNote}}
   note = {{template "Text" $include.ProductionInfo.ActivationNote}}
@@ -111,7 +111,7 @@ resource "akamai_property_include_activation" "{{$include.IncludeName}}_producti
 #  group_id = akamai_property_include.{{$include.IncludeName}}.group_id
 #  include_id = akamai_property_include.{{$include.IncludeName}}.id
 #  network = "PRODUCTION"
-#  auto_acknowledge_rule_warnings = false
+#  auto_acknowledge_rule_warnings = true
 #  version = var.activate_latest_on_production ? akamai_property_include.{{$include.IncludeName}}.latest_version : akamai_property_include.{{$include.IncludeName}}.production_version
 {{- if $include.ProductionInfo.ActivationNote}}
 #  note = {{template "Text" $include.ProductionInfo.ActivationNote}}

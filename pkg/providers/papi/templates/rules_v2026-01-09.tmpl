@@ -775,7 +775,7 @@ api_prioritization {
 		cloudlet_policy {
 {{- range $k, $v := $v}}
 {{- if and (eq $k "id") (ne $v nil)}}
-		id = {{$v | AsInt}}
+		id = {{RuleCPCodeIDReference ($v | AsInt)}}
 {{- end}}
 {{- if and (eq $k "name") (ne $v nil)}}
         name = {{template "Text" $v}}
@@ -798,7 +798,7 @@ api_prioritization {
 		throttled_cp_code {
 {{- range $k, $v := $v}}
 {{- if and (eq $k "id") (ne $v nil)}}
-		id = {{$v | AsInt}}
+		id = {{RuleCPCodeIDReference ($v | AsInt)}}
 {{- end}}
 {{- if and (eq $k "name") (ne $v nil)}}
         name = {{template "Text" $v}}
@@ -886,7 +886,7 @@ application_load_balancer {
 		cloudlet_policy {
 {{- range $k, $v := $v}}
 {{- if and (eq $k "id") (ne $v nil)}}
-		id = {{$v | AsInt}}
+		id = {{RuleCPCodeIDReference ($v | AsInt)}}
 {{- end}}
 {{- if and (eq $k "name") (ne $v nil)}}
         name = {{template "Text" $v}}
@@ -2176,7 +2176,7 @@ cp_code {
 		value {
 {{- range $k, $v := $v}}
 {{- if and (eq $k "id") (ne $v nil)}}
-		id = {{$v | AsInt}}
+		id = {{RuleCPCodeIDReference ($v | AsInt)}}
 {{- end}}
 {{- if and (eq $k "name") (ne $v nil)}}
         name = {{template "Text" $v}}
@@ -2434,7 +2434,11 @@ dcp_dev_relations {
 		custom_values = {{$v}}
 {{- end}}
 {{- if and (eq $k "hostname") (ne $v nil)}}
-        hostname = {{template "Text" $v}}
+	{{- if UseEnvironmentScaffold}}
+	hostname = {{RuleOriginHostnameReference $v}}
+	{{- else}}
+	hostname = {{template "Text" $v}}
+	{{- end}}
 {{- end}}
 {{- if and (eq $k "path") (ne $v nil)}}
         path = {{template "Text" $v}}
@@ -3149,7 +3153,11 @@ edge_redirector {
 		cloudlet_policy {
 {{- range $k, $v := $v}}
 {{- if and (eq $k "id") (ne $v nil)}}
+		{{- if UseEnvironmentScaffold}}
+		id = {{RuleCPCodeIDReference ($v | AsInt)}}
+		{{- else}}
 		id = {{$v | AsInt}}
+		{{- end}}
 {{- end}}
 {{- if and (eq $k "name") (ne $v nil)}}
         name = {{template "Text" $v}}
@@ -5589,7 +5597,7 @@ origin {
         origin_id = {{template "Text" $v}}
 {{- end}}
 {{- if and (eq $k "hostname") (ne $v nil)}}
-        hostname = {{template "Text" $v}}
+	hostname = {{RuleOriginHostnameReference $v}}
 {{- end}}
 {{- if and (eq $k "secondHostnameEnabled") (ne $v nil)}}
 		second_hostname_enabled = {{$v}}
@@ -10632,18 +10640,31 @@ data "akamai_property_rules_builder" "{{$r.TerraformName}}" {
         {{- end}}
 		{{- end}}
 {{- if $isRoot}}
+{{- if UseEnvironmentScaffold}}
+		dynamic "variable" {
+			for_each = var.rule_variables
+			content {
+				name        = variable.value.name
+				description = variable.value.description
+				value       = variable.value.value
+				hidden      = variable.value.hidden
+				sensitive   = variable.value.sensitive
+			}
+		}
+{{- else}}
 {{- range .Variables}}
-        variable {
-            name        = "{{.Name | Escape}}"
-            {{- if .Description}}
-            description = "{{.Description | Escape}}"
-            {{- end}}
-            {{- if .Value}}
-            value       = "{{.Value | Escape}}"
-            {{- end}}
-            hidden      = {{.Hidden}}
-            sensitive   = {{.Sensitive}}
-        }
+		variable {
+			name        = "{{.Name | Escape}}"
+			{{- if .Description}}
+			description = "{{.Description | Escape}}"
+			{{- end}}
+			{{- if .Value}}
+			value       = "{{.Value | Escape}}"
+			{{- end}}
+			hidden      = {{.Hidden}}
+			sensitive   = {{.Sensitive}}
+		}
+{{- end}}
 {{- end}}
 		{{- if .AdvancedOverride}}
         advanced_override = {{template "Text" .AdvancedOverride}}

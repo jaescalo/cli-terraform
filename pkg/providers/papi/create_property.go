@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"sort"
 	"strconv"
@@ -85,15 +86,37 @@ type WrappedRules struct {
 
 // TFData holds template data
 type TFData struct {
-	Includes      []TFIncludeData
-	Property      TFPropertyData
-	EdgercPath    string
-	Section       string
-	Rules         []*WrappedRules
-	RulesAsHCL    bool
-	UseBootstrap  bool
-	UseSplitDepth bool
-	RootRule      string
+	Includes               []TFIncludeData
+	Property               TFPropertyData
+	EdgercPath             string
+	Section                string
+	Rules                  []*WrappedRules
+	RuleVariables          map[string]RuleVariableParam
+	RuleOriginHostnameVars []RuleOriginHostnameParam
+	RuleCPCodeVars         []RuleCPCodeParam
+	RulesAsHCL             bool
+	UseBootstrap           bool
+	UseSplitDepth          bool
+	UseEnvironmentScaffold bool
+	RootRule               string
+}
+
+type RuleVariableParam struct {
+	Name        string
+	Description string
+	Value       string
+	Hidden      bool
+	Sensitive   bool
+}
+
+type RuleOriginHostnameParam struct {
+	VariableName string
+	Hostname     string
+}
+
+type RuleCPCodeParam struct {
+	VariableName string
+	ID           int64
 }
 
 // TFIncludeData holds template data for include
@@ -212,9 +235,11 @@ type propertyOptions struct {
 	edgercPath                string
 	section                   string
 	tfWorkPath                string
+	rulesOutputPath           string
 	version                   string
 	rulesAsHCL                bool
 	withBootstrap             bool
+	useEnvironmentScaffold    bool
 	splitDepth                *int
 	ruleFormatVersionOverride string
 }
@@ -262,11 +287,38 @@ var (
 
 var additionalFuncs = tools.DecorateWithMultilineHandlingFunctions(
 	map[string]any{
-		"TerraformName": tools.TerraformName,
-		"AsInt":         AsInt,
-		"ReportError":   ReportError,
-		"CheckErrors":   CheckErrors,
+		"TerraformName":               tools.TerraformName,
+		"AsInt":                       AsInt,
+		"ReportError":                 ReportError,
+		"CheckErrors":                 CheckErrors,
+		"UseEnvironmentScaffold":      isEnvironmentScaffoldEnabled,
+		"RuleOriginHostnameReference": ruleOriginHostnameReference,
+		"RuleCPCodeIDReference":       ruleCPCodeIDReference,
+		"SortedEdgeHostnameKeys":      sortedEdgeHostnameKeys,
+		"SortedHostnameKeys":          sortedHostnameKeys,
 	})
+
+var templateUseEnvironmentScaffold bool
+var templateOriginHostnameVarRefs map[string]string
+var templateCPCodeVarRefs map[int64]string
+
+func isEnvironmentScaffoldEnabled() bool {
+	return templateUseEnvironmentScaffold
+}
+
+func ruleOriginHostnameReference(hostname string) string {
+	if variableName, ok := templateOriginHostnameVarRefs[hostname]; ok {
+		return fmt.Sprintf("var.%s", variableName)
+	}
+	return strconv.Quote(hostname)
+}
+
+func ruleCPCodeIDReference(id int64) string {
+	if variableName, ok := templateCPCodeVarRefs[id]; ok {
+		return fmt.Sprintf("var.%s", variableName)
+	}
+	return strconv.FormatInt(id, 10)
+}
 
 var propertyRuleWrapper splitDepthRuleWrapper = func(rules []*WrappedRules) TFData {
 	return TFData{
@@ -309,16 +361,6 @@ func CmdCreateProperty(c *cli.Context) error {
 	variablesPath := filepath.Join(tfWorkPath, "variables.tf")
 	importPath := filepath.Join(tfWorkPath, "import.sh")
 
-	err := tools.CheckFiles(propertyPath, variablesPath, importPath)
-	if err != nil {
-		return cli.Exit(color.RedString("%s", err.Error()), 1)
-	}
-	templateToFile := map[string]string{
-		"property.tmpl":  propertyPath,
-		"variables.tmpl": variablesPath,
-		"imports.tmpl":   importPath,
-	}
-
 	var rulesAsHCL bool
 	if c.IsSet("rules-as-hcl") {
 		rulesAsHCL = c.Bool("rules-as-hcl")
@@ -327,6 +369,53 @@ func CmdCreateProperty(c *cli.Context) error {
 	var splitDepth *int
 	if c.IsSet("split-depth") {
 		splitDepth = ptr.To(c.Int("split-depth"))
+	}
+
+	var useEnvironmentScaffold bool
+	if c.IsSet("environment-layout") {
+		useEnvironmentScaffold = c.Bool("environment-layout")
+	}
+
+	templateToFile := map[string]string{}
+	rulesOutputPath := tfWorkPath
+	if useEnvironmentScaffold {
+		modulePath := filepath.Join(tfWorkPath, "modules", "property")
+		rulesOutputPath = modulePath
+		envDevPath := filepath.Join(tfWorkPath, "environments", "dev", "terraform.tfvars")
+		envProdPath := filepath.Join(tfWorkPath, "environments", "prod", "terraform.tfvars")
+
+		err := tools.CheckFiles(
+			filepath.Join(tfWorkPath, "main.tf"),
+			filepath.Join(tfWorkPath, "variables.tf"),
+			filepath.Join(tfWorkPath, "import.sh"),
+			filepath.Join(modulePath, "property.tf"),
+			filepath.Join(modulePath, "variables.tf"),
+			envDevPath,
+			envProdPath,
+		)
+		if err != nil {
+			return cli.Exit(color.RedString("%s", err.Error()), 1)
+		}
+
+		templateToFile = map[string]string{
+			"root_main.tmpl":        filepath.Join(tfWorkPath, "main.tf"),
+			"root_variables.tmpl":   filepath.Join(tfWorkPath, "variables.tf"),
+			"module_property.tmpl":  filepath.Join(modulePath, "property.tf"),
+			"module_variables.tmpl": filepath.Join(modulePath, "variables.tf"),
+			"imports_module.tmpl":   filepath.Join(tfWorkPath, "import.sh"),
+			"env_dev_tfvars.tmpl":   envDevPath,
+			"env_prod_tfvars.tmpl":  envProdPath,
+		}
+	} else {
+		err := tools.CheckFiles(propertyPath, variablesPath, importPath)
+		if err != nil {
+			return cli.Exit(color.RedString("%s", err.Error()), 1)
+		}
+		templateToFile = map[string]string{
+			"property.tmpl":  propertyPath,
+			"variables.tmpl": variablesPath,
+			"imports.tmpl":   importPath,
+		}
 	}
 
 	var isBootstrap bool
@@ -338,6 +427,8 @@ func CmdCreateProperty(c *cli.Context) error {
 	if c.IsSet("rule-format") {
 		ruleFormatVersionOverride = c.String("rule-format")
 	}
+
+	var err error
 
 	processor := templates.FSTemplateProcessor{
 		TemplatesFS:     templateFiles,
@@ -352,7 +443,19 @@ func CmdCreateProperty(c *cli.Context) error {
 			TemplatesFS:     templateFiles,
 			AdditionalFuncs: additionalFuncs,
 		}
-		err = createSplitRulesDir(tfWorkPath)
+		if useEnvironmentScaffold {
+			paths := []string{
+				filepath.Join(tfWorkPath, "modules", "property"),
+				filepath.Join(tfWorkPath, "environments", "dev"),
+				filepath.Join(tfWorkPath, "environments", "prod"),
+			}
+			for _, p := range paths {
+				if err = os.MkdirAll(p, 0755); err != nil {
+					return cli.Exit(color.RedString("Error creating directory for property export: %s", err), 1)
+				}
+			}
+		}
+		err = createSplitRulesDir(rulesOutputPath)
 		if err != nil {
 			return cli.Exit(color.RedString("Error creating directory for rules: %s", err), 1)
 		}
@@ -363,9 +466,11 @@ func CmdCreateProperty(c *cli.Context) error {
 		edgercPath:                edgegrid.GetEdgercPath(c),
 		section:                   edgegrid.GetEdgercSection(c),
 		tfWorkPath:                tfWorkPath,
+		rulesOutputPath:           rulesOutputPath,
 		version:                   version,
 		rulesAsHCL:                rulesAsHCL,
 		withBootstrap:             isBootstrap,
+		useEnvironmentScaffold:    useEnvironmentScaffold,
 		splitDepth:                splitDepth,
 		ruleFormatVersionOverride: ruleFormatVersionOverride,
 	}
@@ -375,12 +480,12 @@ func CmdCreateProperty(c *cli.Context) error {
 	return nil
 }
 
-func createSplitRulesDir(tfWorkPath string) error {
-	stat, err := os.Stat(tfWorkPath)
+func createSplitRulesDir(outputRoot string) error {
+	stat, err := os.Stat(outputRoot)
 	if err != nil {
 		return fmt.Errorf("%w: %s", errReadRuleMode, err)
 	}
-	err = os.Mkdir(filepath.Join(tfWorkPath, "rules"), stat.Mode())
+	err = os.Mkdir(filepath.Join(outputRoot, "rules"), stat.Mode())
 	if err != nil {
 		return fmt.Errorf("%w: %s", errCreateRulesDirectory, err)
 	}
@@ -395,15 +500,25 @@ func isHostnameBucketProperty(p *papi.Property) bool {
 func createProperty(ctx context.Context, options propertyOptions, jsonDir string, client papi.PAPI, clientHapi hapi.HAPI, templateProcessor templates.TemplateProcessor, multiTargetProcessor templates.MultiTargetProcessor) error {
 	term := terminal.Get(ctx)
 
+	templateUseEnvironmentScaffold = options.useEnvironmentScaffold
+	templateOriginHostnameVarRefs = map[string]string{}
+	templateCPCodeVarRefs = map[int64]string{}
+	defer func() {
+		templateUseEnvironmentScaffold = false
+		templateOriginHostnameVarRefs = nil
+		templateCPCodeVarRefs = nil
+	}()
+
 	tfData := TFData{
 		Property: TFPropertyData{
 			EdgeHostnames: make(map[string]EdgeHostname),
 		},
-		EdgercPath:    options.edgercPath,
-		Section:       options.section,
-		RulesAsHCL:    options.rulesAsHCL,
-		UseBootstrap:  options.withBootstrap,
-		UseSplitDepth: options.splitDepth != nil,
+		EdgercPath:             options.edgercPath,
+		Section:                options.section,
+		RulesAsHCL:             options.rulesAsHCL,
+		UseBootstrap:           options.withBootstrap,
+		UseSplitDepth:          options.splitDepth != nil,
+		UseEnvironmentScaffold: options.useEnvironmentScaffold,
 	}
 
 	// Get Property
@@ -468,6 +583,14 @@ func createProperty(ctx context.Context, options propertyOptions, jsonDir string
 
 	// Get Rule Format
 	tfData.Property.RuleFormat = rules.RuleFormat
+	if options.useEnvironmentScaffold {
+		ruleVars, originVars, cpCodeVars, originVarRefs, cpCodeVarRefs := collectRuleModuleParameters(&rules.Rules)
+		tfData.RuleVariables = ruleVars
+		tfData.RuleOriginHostnameVars = originVars
+		tfData.RuleCPCodeVars = cpCodeVars
+		templateOriginHostnameVarRefs = originVarRefs
+		templateCPCodeVarRefs = cpCodeVarRefs
+	}
 
 	term.Spinner().OK()
 
@@ -573,8 +696,11 @@ func createProperty(ctx context.Context, options propertyOptions, jsonDir string
 
 		if options.splitDepth != nil {
 			tfData.RootRule = wrappedRules.TerraformName
-			multiTargetData.AddData("split-depth-rules.tmpl", prepareRulesForSplitRule(wrappedRules, *options.splitDepth, options.tfWorkPath, propertyRuleWrapper))
-			templateProcessor.AddTemplateTarget("rules_module.tmpl", filepath.Join(options.tfWorkPath, "rules", "module_config.tf"))
+			multiTargetData.AddData("split-depth-rules.tmpl", prepareRulesForSplitRule(wrappedRules, *options.splitDepth, options.rulesOutputPath, propertyRuleWrapper))
+			templateProcessor.AddTemplateTarget("rules_module.tmpl", filepath.Join(options.rulesOutputPath, "rules", "module_config.tf"))
+			if options.useEnvironmentScaffold {
+				templateProcessor.AddTemplateTarget("rules_variables.tmpl", filepath.Join(options.rulesOutputPath, "rules", "variables.tf"))
+			}
 		} else {
 			tfData.Rules = flattenRules(wrappedRules)
 			templateProcessor.AddTemplateTarget(ruleTemplate, filepath.Join(options.tfWorkPath, "rules.tf"))
@@ -1347,4 +1473,186 @@ func prepareRulesForSplitRule(rules *WrappedRules, rulesSplitNestingLeft int, tf
 	}
 
 	return processedRules
+}
+
+func sortedEdgeHostnameKeys(input map[string]EdgeHostname) []string {
+	keys := make([]string, 0, len(input))
+	for key := range input {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+func sortedHostnameKeys(input map[string]Hostname) []string {
+	keys := make([]string, 0, len(input))
+	for key := range input {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+func collectRuleModuleParameters(rootRule *papi.Rules) (map[string]RuleVariableParam, []RuleOriginHostnameParam, []RuleCPCodeParam, map[string]string, map[int64]string) {
+	ruleVariables := map[string]RuleVariableParam{}
+	originHostnames := map[string]string{}
+	cpCodeIDs := map[int64]string{}
+	originHostnameVars := make([]RuleOriginHostnameParam, 0)
+	cpCodeVars := make([]RuleCPCodeParam, 0)
+
+	nameOccurrences := map[string]int{}
+	for _, variable := range rootRule.Variables {
+		keyBase := tools.TerraformName(variable.Name)
+		if keyBase == "" {
+			keyBase = "rule_variable"
+		}
+		nameOccurrences[keyBase]++
+		key := keyBase
+		if nameOccurrences[keyBase] > 1 {
+			key = fmt.Sprintf("%s_%d", keyBase, nameOccurrences[keyBase]-1)
+		}
+		ruleVariables[key] = RuleVariableParam{
+			Name:        variable.Name,
+			Description: derefString(variable.Description),
+			Value:       derefString(variable.Value),
+			Hidden:      variable.Hidden,
+			Sensitive:   variable.Sensitive,
+		}
+	}
+
+	behaviorNameOccurrences := map[string]int{}
+	collectBehaviorParameters(*rootRule, originHostnames, cpCodeIDs, &originHostnameVars, &cpCodeVars, behaviorNameOccurrences)
+
+	sort.Slice(originHostnameVars, func(i, j int) bool {
+		return originHostnameVars[i].VariableName < originHostnameVars[j].VariableName
+	})
+	sort.Slice(cpCodeVars, func(i, j int) bool {
+		return cpCodeVars[i].VariableName < cpCodeVars[j].VariableName
+	})
+
+	return ruleVariables, originHostnameVars, cpCodeVars, originHostnames, cpCodeIDs
+}
+
+func collectBehaviorParameters(rule papi.Rules, originHostnames map[string]string, cpCodeIDs map[int64]string, originHostnameVars *[]RuleOriginHostnameParam, cpCodeVars *[]RuleCPCodeParam, nameOccurrences map[string]int) {
+	ruleName := tools.TerraformName(rule.Name)
+	if ruleName == "" {
+		ruleName = "default"
+	}
+
+	for _, behavior := range rule.Behaviors {
+		if behavior.Name == "origin" {
+			if hostname, ok := behavior.Options["hostname"].(string); ok && hostname != "" {
+				if _, exists := originHostnames[hostname]; !exists {
+					variableName := uniqueRuleParameterName(fmt.Sprintf("rule_%s_origin_hostname", ruleName), nameOccurrences)
+					originHostnames[hostname] = variableName
+					*originHostnameVars = append(*originHostnameVars, RuleOriginHostnameParam{
+						VariableName: variableName,
+						Hostname:     hostname,
+					})
+				}
+			}
+		}
+
+		if behavior.Name == "cpCode" {
+			if rawValue, ok := behavior.Options["value"]; ok {
+				if id, ok := extractCPCodeID(rawValue); ok {
+					if _, exists := cpCodeIDs[id]; !exists {
+						variableName := uniqueRuleParameterName(fmt.Sprintf("rule_%s_cp_code", ruleName), nameOccurrences)
+						cpCodeIDs[id] = variableName
+						*cpCodeVars = append(*cpCodeVars, RuleCPCodeParam{
+							VariableName: variableName,
+							ID:           id,
+						})
+					}
+				}
+			}
+		}
+	}
+
+	for _, child := range rule.Children {
+		collectBehaviorParameters(child, originHostnames, cpCodeIDs, originHostnameVars, cpCodeVars, nameOccurrences)
+	}
+}
+
+func uniqueRuleParameterName(base string, nameOccurrences map[string]int) string {
+	nameOccurrences[base]++
+	if nameOccurrences[base] == 1 {
+		return base
+	}
+	return fmt.Sprintf("%s_%d", base, nameOccurrences[base]-1)
+}
+
+func asInt64(value any) (int64, bool) {
+	switch v := value.(type) {
+	case int:
+		return int64(v), true
+	case int32:
+		return int64(v), true
+	case int64:
+		return v, true
+	case float64:
+		return int64(v), true
+	case json.Number:
+		parsed, err := v.Int64()
+		if err != nil {
+			return 0, false
+		}
+		return parsed, true
+	default:
+		return 0, false
+	}
+}
+
+func extractCPCodeID(value any) (int64, bool) {
+	if valueMap, ok := value.(map[string]any); ok {
+		if id, ok := asInt64(valueMap["id"]); ok {
+			return id, true
+		}
+	}
+
+	reflectValue := reflect.ValueOf(value)
+	for reflectValue.IsValid() && reflectValue.Kind() == reflect.Pointer {
+		if reflectValue.IsNil() {
+			return 0, false
+		}
+		reflectValue = reflectValue.Elem()
+	}
+
+	if !reflectValue.IsValid() {
+		return 0, false
+	}
+
+	if reflectValue.Kind() == reflect.Map {
+		for _, key := range reflectValue.MapKeys() {
+			if key.Kind() == reflect.String && strings.EqualFold(key.String(), "id") {
+				if id, ok := asInt64(reflectValue.MapIndex(key).Interface()); ok {
+					return id, true
+				}
+			}
+		}
+		return 0, false
+	}
+
+	if reflectValue.Kind() != reflect.Struct {
+		return 0, false
+	}
+
+	for _, fieldName := range []string{"ID", "Id"} {
+		field := reflectValue.FieldByName(fieldName)
+		if !field.IsValid() {
+			continue
+		}
+		if id, ok := asInt64(field.Interface()); ok {
+			return id, true
+		}
+	}
+
+	return 0, false
+}
+
+func derefString(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return *value
 }

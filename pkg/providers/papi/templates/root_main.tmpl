@@ -1,0 +1,40 @@
+{{- /*gotype: github.com/akamai/cli-terraform/v2/pkg/providers/papi.TFData*/ -}}
+terraform {
+  required_providers {
+    akamai = {
+      source  = "akamai/akamai"
+      version = ">= 10.0.0"
+    }
+  }
+  required_version = ">= 1.0"
+}
+
+provider "akamai" {
+  edgerc         = var.edgerc_path
+  config_section = var.config_section
+}
+
+module "property" {
+  source = "./modules/property"
+
+  providers = {
+    akamai = akamai
+  }
+
+  contract_id                  = var.contract_id
+  group_id                     = var.group_id
+  property_config              = var.property_config
+  edge_hostnames               = var.edge_hostnames
+  property_hostnames           = var.property_hostnames
+  rule_variables               = var.rule_variables
+  {{- range .RuleOriginHostnameVars}}
+  {{.VariableName}} = var.{{.VariableName}}
+  {{- end}}
+  {{- range .RuleCPCodeVars}}
+  {{.VariableName}} = var.{{.VariableName}}
+  {{- end}}
+  activation_config            = var.activation_config
+  version_notes                = var.version_notes
+  activate_latest_on_staging   = var.activate_latest_on_staging
+  activate_latest_on_production = var.activate_latest_on_production
+}
