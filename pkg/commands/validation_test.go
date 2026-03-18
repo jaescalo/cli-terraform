@@ -22,6 +22,7 @@ func TestValidateEnvironmentLayout(t *testing.T) {
 		flagSet.Bool("environment-layout", false, "")
 		flagSet.Bool("rules-as-hcl", false, "")
 		flagSet.Int("split-depth", 0, "")
+		flagSet.String("rule-format", "", "")
 
 		ctx := cli.NewContext(app, flagSet, nil)
 		err := validateEnvironmentLayout(ctx)
@@ -34,6 +35,7 @@ func TestValidateEnvironmentLayout(t *testing.T) {
 		flagSet.Bool("environment-layout", false, "")
 		flagSet.Bool("rules-as-hcl", false, "")
 		flagSet.Int("split-depth", 0, "")
+		flagSet.String("rule-format", "", "")
 		require.NoError(t, flagSet.Set("environment-layout", "true"))
 		require.NoError(t, flagSet.Set("split-depth", "1"))
 
@@ -49,6 +51,7 @@ func TestValidateEnvironmentLayout(t *testing.T) {
 		flagSet.Bool("environment-layout", false, "")
 		flagSet.Bool("rules-as-hcl", false, "")
 		flagSet.Int("split-depth", 0, "")
+		flagSet.String("rule-format", "", "")
 		require.NoError(t, flagSet.Set("environment-layout", "true"))
 		require.NoError(t, flagSet.Set("rules-as-hcl", "true"))
 
@@ -58,15 +61,52 @@ func TestValidateEnvironmentLayout(t *testing.T) {
 		assert.Contains(t, err.Error(), `"environment-layout" option must be used along with "split-depth"`)
 	})
 
+	t.Run("missing rule-format", func(t *testing.T) {
+		app := cli.NewApp()
+		flagSet := flag.NewFlagSet("test", flag.PanicOnError)
+		flagSet.Bool("environment-layout", false, "")
+		flagSet.Bool("rules-as-hcl", false, "")
+		flagSet.Int("split-depth", 0, "")
+		flagSet.String("rule-format", "", "")
+		require.NoError(t, flagSet.Set("environment-layout", "true"))
+		require.NoError(t, flagSet.Set("rules-as-hcl", "true"))
+		require.NoError(t, flagSet.Set("split-depth", "1"))
+
+		ctx := cli.NewContext(app, flagSet, nil)
+		err := validateEnvironmentLayout(ctx)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), `"environment-layout" option must be used along with "rule-format"`)
+	})
+
+	t.Run("rule-format too old", func(t *testing.T) {
+		app := cli.NewApp()
+		flagSet := flag.NewFlagSet("test", flag.PanicOnError)
+		flagSet.Bool("environment-layout", false, "")
+		flagSet.Bool("rules-as-hcl", false, "")
+		flagSet.Int("split-depth", 0, "")
+		flagSet.String("rule-format", "", "")
+		require.NoError(t, flagSet.Set("environment-layout", "true"))
+		require.NoError(t, flagSet.Set("rules-as-hcl", "true"))
+		require.NoError(t, flagSet.Set("split-depth", "1"))
+		require.NoError(t, flagSet.Set("rule-format", "v2025-01-13"))
+
+		ctx := cli.NewContext(app, flagSet, nil)
+		err := validateEnvironmentLayout(ctx)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), `"environment-layout" option is supported only for format v2026-01-09 and above`)
+	})
+
 	t.Run("valid combination", func(t *testing.T) {
 		app := cli.NewApp()
 		flagSet := flag.NewFlagSet("test", flag.PanicOnError)
 		flagSet.Bool("environment-layout", false, "")
 		flagSet.Bool("rules-as-hcl", false, "")
 		flagSet.Int("split-depth", 0, "")
+		flagSet.String("rule-format", "", "")
 		require.NoError(t, flagSet.Set("environment-layout", "true"))
 		require.NoError(t, flagSet.Set("rules-as-hcl", "true"))
 		require.NoError(t, flagSet.Set("split-depth", "1"))
+		require.NoError(t, flagSet.Set("rule-format", "v2026-01-09"))
 
 		ctx := cli.NewContext(app, flagSet, nil)
 		err := validateEnvironmentLayout(ctx)

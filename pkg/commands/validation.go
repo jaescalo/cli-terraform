@@ -12,6 +12,8 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
+const environmentLayoutMinRuleFormat = "v2026-01-09"
+
 var osExiter = os.Exit
 
 type actionValidator func(*cli.Context) error
@@ -82,6 +84,13 @@ func validateEnvironmentLayout(ctx *cli.Context) error {
 	}
 	if !ctx.IsSet("split-depth") {
 		return cli.Exit(color.RedString(`"environment-layout" option must be used along with "split-depth"`), 1)
+	}
+	if !ctx.IsSet("rule-format") {
+		return cli.Exit(color.RedString(`"environment-layout" option must be used along with "rule-format" and supports only format %s and above`, environmentLayoutMinRuleFormat), 1)
+	}
+	ruleFormat := ctx.String("rule-format")
+	if ruleFormat < environmentLayoutMinRuleFormat {
+		return cli.Exit(color.RedString(`"environment-layout" option is supported only for format %s and above`, environmentLayoutMinRuleFormat), 1)
 	}
 	return nil
 }

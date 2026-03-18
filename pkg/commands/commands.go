@@ -382,7 +382,7 @@ func CommandLocator() []*cli.Command {
 				},
 				&cli.BoolFlag{
 					Name:  "environment-layout",
-					Usage: "Creates a multi-environment scaffold (root module call, modules/property, and environments/dev|prod tfvars). Requires --rules-as-hcl and --split-depth.",
+					Usage: "Creates a multi-environment scaffold (root module call, modules/property, and environments/dev|prod tfvars). Requires --rules-as-hcl, --split-depth, and --rule-format v2026-01-09 or newer.",
 				},
 				&cli.StringFlag{
 					Name:        "tfworkpath",
