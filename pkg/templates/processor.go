@@ -9,6 +9,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"text/template"
@@ -44,6 +45,7 @@ type (
 var (
 	errEmptyProcessingOutput = errors.New("empty processing output")
 	errTemplateCreation      = errors.New("creating template")
+	importCommandPattern     = regexp.MustCompile(`^terraform import\s+(\S+)\s+(.+)$`)
 	// ErrTemplateExecution is returned when template.Execute method fails
 	ErrTemplateExecution = errors.New("executing template")
 	// ErrSavingFiles is returned when an issue with processing templates occurs
@@ -138,7 +140,56 @@ func processTemplateToFile(tmpl *template.Template, templateName, targetPath str
 	if err := os.WriteFile(targetPath, out, 0644); err != nil {
 		return fmt.Errorf("%w: '%s': %s", ErrSavingFiles, targetPath, err)
 	}
+
+	if shouldGenerateImportBlocks(targetPath) {
+		importBlocks, ok := convertImportScriptToImportBlocks(out)
+		if ok {
+			importTFPath := filepath.Join(filepath.Dir(targetPath), "import.tf")
+			if err := os.WriteFile(importTFPath, importBlocks, 0644); err != nil {
+				return fmt.Errorf("%w: '%s': %s", ErrSavingFiles, importTFPath, err)
+			}
+		}
+	}
+
 	return nil
+}
+
+func shouldGenerateImportBlocks(targetPath string) bool {
+	return strings.HasSuffix(filepath.Base(targetPath), "import.sh")
+}
+
+func convertImportScriptToImportBlocks(script []byte) ([]byte, bool) {
+	lines := strings.Split(string(script), "\n")
+	blocks := bytes.Buffer{}
+	blocks.WriteString("# Auto-generated inline imports\n\n")
+
+	foundImports := false
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		match := importCommandPattern.FindStringSubmatch(trimmed)
+		if len(match) != 3 {
+			continue
+		}
+
+		resource := strings.TrimSpace(match[1])
+		resourceID := strings.TrimSpace(match[2])
+
+		blocks.WriteString("import {\n")
+		blocks.WriteString("  to = ")
+		blocks.WriteString(resource)
+		blocks.WriteString("\n")
+		blocks.WriteString("  id = ")
+		blocks.WriteString(strconv.Quote(resourceID))
+		blocks.WriteString("\n")
+		blocks.WriteString("}\n\n")
+		foundImports = true
+	}
+
+	if !foundImports {
+		return nil, false
+	}
+
+	return hclwrite.Format(blocks.Bytes()), true
 }
 
 func formatIntList(items []int) string {

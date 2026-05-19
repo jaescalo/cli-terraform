@@ -1,0 +1,98 @@
+{{- /*gotype: github.com/akamai/cli-terraform/v2/pkg/providers/papi.TFData*/ -}}
+contract_id = "{{.Property.ContractID}}"
+group_id    = "{{.Property.GroupID}}"
+
+property_config = {
+  name       = "{{.Property.PropertyName}}"
+  product_id = "{{.Property.ProductID}}"
+}
+
+edge_hostnames = {
+{{- range $key := SortedEdgeHostnameKeys .Property.EdgeHostnames}}
+{{- $edge := index $.Property.EdgeHostnames $key}}
+  "{{$key}}" = {
+    ip_behavior   = "{{$edge.IPv6}}"
+    edge_hostname = "{{$edge.EdgeHostname}}"
+    {{- if $edge.CertificateID}}
+    certificate   = {{$edge.CertificateID}}
+    {{- end}}
+    {{- if $edge.TTL}}
+    ttl           = {{$edge.TTL}}
+    {{- end}}
+  }
+{{- end}}
+}
+
+property_hostnames = {
+{{- range $key := SortedHostnameKeys .Property.Hostnames}}
+{{- $hostname := index $.Property.Hostnames $key}}
+  "{{$key}}" = {
+    cname_from             = "{{$hostname.CnameFrom}}"
+    cname_to               = "{{$hostname.CnameTo}}"
+    cert_provisioning_type = "{{$hostname.CertProvisioningType}}"
+    {{- with $hostname.CCMCertificates}}
+    ccm_certificates = {
+      {{- if .RSACertID}}
+      rsa_cert_id   = "{{.RSACertID}}"
+      {{- end}}
+      {{- if .ECDSACertID}}
+      ecdsa_cert_id = "{{.ECDSACertID}}"
+      {{- end}}
+    }
+    {{- end}}
+    {{- with $hostname.MTLS}}
+    mtls = {
+      ca_set_id          = "{{.CASetID}}"
+      check_client_ocsp  = {{.CheckClientOCSP}}
+      send_ca_set_client = {{.SendCASetClient}}
+    }
+    {{- end}}
+    {{- with $hostname.TLSConfiguration}}
+    tls_configuration = {
+      cipher_profile              = "{{.CipherProfile}}"
+      {{- if .DisallowedTLSVersions}}
+      disallowed_tls_versions     = [{{range $index, $element := .DisallowedTLSVersions}}{{if $index}}, {{end}}"{{$element}}"{{end}}]
+      {{- end}}
+      fips_mode                   = {{.FIPSMode}}
+      staple_server_ocsp_response = {{.StapleServerOcspResponse}}
+    }
+    {{- end}}
+  }
+{{- end}}
+}
+
+rule_variables = {
+{{- range $key, $variable := .RuleVariables}}
+  "{{$key}}" = {
+    name        = "{{$variable.Name | Escape}}"
+    description = "{{$variable.Description | Escape}}"
+    value       = "{{$variable.Value | Escape}}"
+    hidden      = {{$variable.Hidden}}
+    sensitive   = {{$variable.Sensitive}}
+  }
+{{- end}}
+}
+
+{{- range .RuleOriginHostnameVars}}
+{{.VariableName}} = "{{.Hostname | Escape}}"
+{{- end}}
+
+{{- range .RuleCPCodeVars}}
+{{.VariableName}} = {{.ID}}
+{{- end}}
+
+activation_config = {
+  staging = {
+    contacts = [{{range $index, $element := .Property.StagingInfo.Emails}}{{if $index}}, {{end}}"{{$element}}"{{end}}]
+    note     = {{template "Text" .Property.StagingInfo.ActivationNote}}
+  }
+  production = {
+    contacts = [{{range $index, $element := .Property.ProductionInfo.Emails}}{{if $index}}, {{end}}"{{$element}}"{{end}}]
+    note     = {{template "Text" .Property.ProductionInfo.ActivationNote}}
+  }
+}
+
+version_notes = ""
+
+activate_latest_on_staging = {{.Property.StagingInfo.IsActiveOnLatestVersion}}
+activate_latest_on_production = {{.Property.ProductionInfo.IsActiveOnLatestVersion}}

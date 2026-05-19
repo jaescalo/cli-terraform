@@ -4,17 +4,115 @@ import (
 	"bytes"
 	"flag"
 	"fmt"
-	"io"
-	"os"
-	"testing"
-
 	"github.com/akamai/AkamaiOPEN-edgegrid-golang/v13/pkg/papi"
 	"github.com/akamai/cli/v2/pkg/color"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"github.com/urfave/cli/v2"
+	"io"
+	"os"
+	"testing"
 )
+
+func TestValidateEnvironmentLayout(t *testing.T) {
+	t.Run("flag not set", func(t *testing.T) {
+		app := cli.NewApp()
+		flagSet := flag.NewFlagSet("test", flag.PanicOnError)
+		flagSet.Bool("environment-layout", false, "")
+		flagSet.Bool("rules-as-hcl", false, "")
+		flagSet.Int("split-depth", 0, "")
+		flagSet.String("rule-format", "", "")
+
+		ctx := cli.NewContext(app, flagSet, nil)
+		err := validateEnvironmentLayout(ctx)
+		assert.NoError(t, err)
+	})
+
+	t.Run("missing rules-as-hcl", func(t *testing.T) {
+		app := cli.NewApp()
+		flagSet := flag.NewFlagSet("test", flag.PanicOnError)
+		flagSet.Bool("environment-layout", false, "")
+		flagSet.Bool("rules-as-hcl", false, "")
+		flagSet.Int("split-depth", 0, "")
+		flagSet.String("rule-format", "", "")
+		require.NoError(t, flagSet.Set("environment-layout", "true"))
+		require.NoError(t, flagSet.Set("split-depth", "1"))
+
+		ctx := cli.NewContext(app, flagSet, nil)
+		err := validateEnvironmentLayout(ctx)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), `"environment-layout" option must be used along with "rules-as-hcl"`)
+	})
+
+	t.Run("missing split-depth", func(t *testing.T) {
+		app := cli.NewApp()
+		flagSet := flag.NewFlagSet("test", flag.PanicOnError)
+		flagSet.Bool("environment-layout", false, "")
+		flagSet.Bool("rules-as-hcl", false, "")
+		flagSet.Int("split-depth", 0, "")
+		flagSet.String("rule-format", "", "")
+		require.NoError(t, flagSet.Set("environment-layout", "true"))
+		require.NoError(t, flagSet.Set("rules-as-hcl", "true"))
+
+		ctx := cli.NewContext(app, flagSet, nil)
+		err := validateEnvironmentLayout(ctx)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), `"environment-layout" option must be used along with "split-depth"`)
+	})
+
+	t.Run("missing rule-format", func(t *testing.T) {
+		app := cli.NewApp()
+		flagSet := flag.NewFlagSet("test", flag.PanicOnError)
+		flagSet.Bool("environment-layout", false, "")
+		flagSet.Bool("rules-as-hcl", false, "")
+		flagSet.Int("split-depth", 0, "")
+		flagSet.String("rule-format", "", "")
+		require.NoError(t, flagSet.Set("environment-layout", "true"))
+		require.NoError(t, flagSet.Set("rules-as-hcl", "true"))
+		require.NoError(t, flagSet.Set("split-depth", "1"))
+
+		ctx := cli.NewContext(app, flagSet, nil)
+		err := validateEnvironmentLayout(ctx)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), `"environment-layout" option must be used along with "rule-format"`)
+	})
+
+	t.Run("rule-format too old", func(t *testing.T) {
+		app := cli.NewApp()
+		flagSet := flag.NewFlagSet("test", flag.PanicOnError)
+		flagSet.Bool("environment-layout", false, "")
+		flagSet.Bool("rules-as-hcl", false, "")
+		flagSet.Int("split-depth", 0, "")
+		flagSet.String("rule-format", "", "")
+		require.NoError(t, flagSet.Set("environment-layout", "true"))
+		require.NoError(t, flagSet.Set("rules-as-hcl", "true"))
+		require.NoError(t, flagSet.Set("split-depth", "1"))
+		require.NoError(t, flagSet.Set("rule-format", "v2025-01-13"))
+
+		ctx := cli.NewContext(app, flagSet, nil)
+		err := validateEnvironmentLayout(ctx)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), `"environment-layout" option is supported only for format v2026-01-09 and above`)
+	})
+
+	t.Run("valid combination", func(t *testing.T) {
+		app := cli.NewApp()
+		flagSet := flag.NewFlagSet("test", flag.PanicOnError)
+		flagSet.Bool("environment-layout", false, "")
+		flagSet.Bool("rules-as-hcl", false, "")
+		flagSet.Int("split-depth", 0, "")
+		flagSet.String("rule-format", "", "")
+		require.NoError(t, flagSet.Set("environment-layout", "true"))
+		require.NoError(t, flagSet.Set("rules-as-hcl", "true"))
+		require.NoError(t, flagSet.Set("split-depth", "1"))
+		require.NoError(t, flagSet.Set("rule-format", "v2026-01-09"))
+
+		ctx := cli.NewContext(app, flagSet, nil)
+		err := validateEnvironmentLayout(ctx)
+		assert.NoError(t, err)
+	})
+}
 
 func TestValidatedAction(t *testing.T) {
 	t.Run("empty validation list", func(t *testing.T) {
