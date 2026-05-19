@@ -27,6 +27,7 @@ Feature is enabled only when:
 - `--environment-layout=true`
 - `--rules-as-hcl=true`
 - `--split-depth` is set
+- `--rule-format <version>` where `<version>` is `v2026-01-09` or newer
 
 If these prerequisites are not met, command must fail validation.
 
